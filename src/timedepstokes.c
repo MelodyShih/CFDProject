@@ -115,7 +115,7 @@ int main(int argc,char **argv)
   ierr = VecCopy(user.sol,user.sol_old);
 
   int iter;
-  for (size_t i = 0; i < 1; i++) {
+  for (size_t i = 0; i < mx/8; i++) {
     ierr = SetRhs(&user,user.rhs,user.t,user.dt);
     ierr = KSPSolve(ksp,user.rhs,user.sol);CHKERRQ(ierr);
     ierr = KSPGetIterationNumber(ksp,&iter);

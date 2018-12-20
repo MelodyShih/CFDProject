@@ -8,6 +8,9 @@ INCLUDE_DIR=./src
 %.o: %.c
 	-${CLINKER} -c ${PETSC_CCPPFLAGS} ${PETSC_LIB} $< -o $@
 
+codevalid: src/codevalid.c src/operators.o src/utils.o src/solver.o
+		-${CLINKER} -o codevalid $^ ${PETSC_CCPPFLAGS} ${PETSC_LIB}
+
 timedepstokes: src/timedepstokes.c src/operators.o src/utils.o src/solver.o
 	-${CLINKER} -o timedepstokes $^ ${PETSC_CCPPFLAGS} ${PETSC_LIB}
 

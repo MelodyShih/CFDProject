@@ -105,7 +105,7 @@ PetscErrorCode ConstructLuOp(DM da, Mat subA, void *ctx)
       row.i = i; row.j = j;
       v[0] = -0.5*mu*dt/HxHy;              col[0].i = i;   col[0].j = j-1;
       v[1] = -0.5*mu*dt/HxHy;              col[1].i = i-1; col[1].j = j;
-      v[2] = 1 + 4.0*0.5*mu*dt/HxHy;       col[2].i = i;   col[2].j = j;
+      v[2] = 1 + 0.5*4.0*mu*dt/HxHy;       col[2].i = i;   col[2].j = j;
       v[3] = -0.5*mu*dt/HxHy;              col[3].i = i+1; col[3].j = j;
       v[4] = -0.5*mu*dt/HxHy;              col[4].i = i;   col[4].j = j+1;
       ierr = MatSetValuesStencil(subA,1,&row,5,col,v,INSERT_VALUES);CHKERRQ(ierr);

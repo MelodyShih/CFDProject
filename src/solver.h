@@ -7,5 +7,4 @@ PetscErrorCode ShellPCApply(PC pc,Vec x,Vec y);
 PetscErrorCode SetupHelmholtzKSP(UserContext *user);
 PetscErrorCode SetupPoissionKSP(UserContext *user);
 
-
 #endif
