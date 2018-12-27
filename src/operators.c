@@ -16,17 +16,7 @@ PetscErrorCode SetupMatrix(UserContext *user)
   ierr = ConstructDxOp(user->da_u, user->subA[6], user);CHKERRQ(ierr);
   ierr = ConstructDyOp(user->da_u, user->subA[7], user);CHKERRQ(ierr);
   ierr = ConstructGxOp(user->da_u, user->subA[2], user);CHKERRQ(ierr);
-  // MatView(user->subA[2], (PetscViewer) PETSC_VIEWER_DEFAULT);
-
   ierr = ConstructGyOp(user->da_u, user->subA[5], user);CHKERRQ(ierr);
-  // printf("Gy = \n");
-  // MatView(user->subA[0], (PetscViewer) PETSC_VIEWER_DEFAULT);
-  // Mat test;
-  // MatMatMult(user->subA[2],user->subA[6],MAT_INITIAL_MATRIX,PETSC_DEFAULT,&test);
-  // // MatTranspose(user->subA[0], MAT_INITIAL_MATRIX,&test);
-  // MatView(test, (PetscViewer) PETSC_VIEWER_DEFAULT);
-  // MatMatMult(user->subA[5],user->subA[7],MAT_REUSE_MATRIX,PETSC_DEFAULT,&test);
-  // MatView(test, (PetscViewer) PETSC_VIEWER_DEFAULT);
 
   ierr = MatCreateNest(PETSC_COMM_WORLD,3,NULL,3,NULL,user->subA,&user->A);
   ierr = MatViewFromOptions(user->A,NULL,"-view_mat");CHKERRQ(ierr);
@@ -36,7 +26,6 @@ PetscErrorCode SetupMatrix(UserContext *user)
 
   ierr = DMCreateMatrix(user->da_u,&user->L); CHKERRQ(ierr);
   ierr = ConstructLaplaceOp(user->da_u,user->L,user);CHKERRQ(ierr);
-  // MatView(user->L, (PetscViewer) PETSC_VIEWER_DEFAULT);
 
 
   return(0);

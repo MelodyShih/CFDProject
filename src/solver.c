@@ -1,8 +1,6 @@
 #include <petscdm.h>
 #include <petscdmda.h>
 #include <petscksp.h>
-// #include <petscpcmg.h>
-
 #include "utils.h"
 
 PetscErrorCode ShellPCApply(PC pc,Vec x,Vec y)
@@ -83,7 +81,6 @@ static PetscErrorCode PCMGSetupHelmholtz(PC pc,DM da_fine)
   int mcoarse, mfine;
   DMDAGetInfo(da_fine,0,&mfine,0,0,0,0,0,0,0,0,0,0,0);
   nlevels = log2(mfine);
-  // nlevels = 2;
 
   ierr = PetscMalloc(sizeof(DM)*nlevels,&da_list);CHKERRQ(ierr);
   for (k=0; k<nlevels; k++) da_list[k] = NULL;
@@ -308,7 +305,6 @@ static PetscErrorCode PCMGSetupPoission(PC pc,DM da_fine, UserContext* user)
   int mcoarse, mfine;
   DMDAGetInfo(da_fine,0,&mfine,0,0,0,0,0,0,0,0,0,0,0);
   nlevels = log2(mfine);
-  // nlevels = 2;
 
   ierr = PetscMalloc(sizeof(DM)*nlevels,&da_list);CHKERRQ(ierr);
   for (k=0; k<nlevels; k++) da_list[k] = NULL;
@@ -347,8 +343,8 @@ static PetscErrorCode PCMGSetupPoission(PC pc,DM da_fine, UserContext* user)
   PCMGGetSmoother(pc,0,&ksplevel);
   ConstructLaplaceOp(da_list[0], oplevel, user);
   KSPSetOperators(ksplevel,oplevel,oplevel);
-  // KSPSetType(ksplevel,KSPRICHARDSON);
-  // KSPRichardsonSetScale(ksplevel,2.0/3.0);
+  KSPSetType(ksplevel,KSPRICHARDSON);
+  KSPRichardsonSetScale(ksplevel,2.0/3.0);
 
   for (k=1; k<nlevels; k++) {
     if (k < nlevels) {
@@ -403,7 +399,6 @@ static PetscErrorCode PCMGSetupPoission(PC pc,DM da_fine, UserContext* user)
 
   }
 
-  /* tidy up */
   for (k=0; k<nlevels; k++) {
     ierr = DMDestroy(&da_list[k]);CHKERRQ(ierr);
   }

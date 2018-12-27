@@ -59,109 +59,6 @@ PetscScalar CalcFv(const PetscScalar x,
   // return M_PI*exp(-2*mu*t)*sin(4*M_PI*y) + mu*exp(-mu*t)*cos(2*M_PI*y)*sin(2*M_PI*x) - 8*mu*M_PI*M_PI*exp(-mu*t)*cos(2*M_PI*y)*sin(2*M_PI*x);
 }
 
-int main(int argc,char **argv)
-{
-  KSP            ksp;
-  PC             pc;
-  UserContext    user;
-  PetscErrorCode ierr;
-  PetscInt       mx,my;
-
-  ierr = PetscInitialize(&argc,&argv,(char*)0,NULL);if (ierr) return ierr;
-  ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
-
-  /* da for u */
-  ierr = DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_PERIODIC, DMDA_STENCIL_STAR,4,4,
-                      PETSC_DECIDE,PETSC_DECIDE,1,1,0,0,&user.da_u);CHKERRQ(ierr);
-  ierr = DMSetFromOptions(user.da_u);CHKERRQ(ierr);
-  ierr = DMSetUp(user.da_u);CHKERRQ(ierr);
-  ierr = DMDASetUniformCoordinates(user.da_u,0,1,0,1,0,0);CHKERRQ(ierr);
-  ierr = DMDASetFieldName(user.da_u,0,"u");CHKERRQ(ierr);
-  ierr = DMDAGetInfo(user.da_u,0,&mx,&my,0,0,0,0,0,0,0,0,0,0);CHKERRQ(ierr);
-
-  user.nx = mx;
-  user.ny = my;
-  user.hx = 1.0/mx;
-  user.hy = 1.0/my;
-  user.mu = 1.0;
-  user.dt = 1.0/mx;
-  user.t = 0;
-  user.gmresiter = 0;
-  user.hxvcycles = 0;
-  user.hyvcycles = 0;
-  user.pvcycles = 0;
-
-  printf("mx = %d, my = %d\n", mx, my);
-  printf("dt = %f\n", user.dt);
-
-  /* matrix for all dofs */
-  ierr = SetupMatrix(&user);
-  ierr = SetupIndexSets(&user);
-  ierr = SetupHelmholtzKSP(&user);
-  ierr = SetupPoissionKSP(&user);
-  ierr = AllocateVectors(&user); // initialize sol, rhs
-
-  ierr = KSPSetOperators(ksp,user.A,user.A);CHKERRQ(ierr);
-  ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
-  ierr = KSPSetUp(ksp);CHKERRQ(ierr);
-  ierr = KSPGetPC(ksp,&pc);
-  ierr = PCSetType(pc,PCSHELL);
-  ierr = PCShellSetApply(pc,ShellPCApply);
-  ierr = PCShellSetContext(pc,&user);
-  ierr = PCSetFromOptions(pc);CHKERRQ(ierr);
-
-  //initialize sol vector
-  ierr = ExactSolution(&user, user.sol, 0);
-  ierr = VecCopy(user.sol,user.sol_old);
-
-  int iter;
-  for (size_t i = 0; i < mx/8; i++) {
-    ierr = SetRhs(&user,user.rhs,user.t,user.dt);
-    ierr = KSPSolve(ksp,user.rhs,user.sol);CHKERRQ(ierr);
-    ierr = KSPGetIterationNumber(ksp,&iter);
-    user.gmresiter = user.gmresiter+iter;
-    ierr = VecCopy(user.sol,user.sol_old); CHKERRQ(ierr);
-    user.t += user.dt;
-  }
-
-  printf("#gmresiter = %d, #vcycles = %d\n", user.gmresiter,
-                                             user.hxvcycles+user.hyvcycles+user.pvcycles);
-
-  PetscScalar solanal_norm, err;
-  Vec u, utrue;
-  ierr = ExactSolution(&user, user.exactsol, user.t-0.5*user.dt);
-  ierr = VecGetSubVector(user.exactsol, user.isg[2], &utrue);
-  ierr = VecGetSubVector(user.sol, user.isg[2], &u);
-  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
-
-  ierr = VecAXPY(utrue,-1.0, u);
-  ierr = VecNorm(utrue,NORM_2,&err);
-  printf("p relerr = %f\n", err/solanal_norm);
-
-  ierr = ExactSolution(&user, user.exactsol, user.t);
-  ierr = VecGetSubVector(user.exactsol, user.isg[1], &utrue);
-  ierr = VecGetSubVector(user.sol, user.isg[1], &u);
-  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
-  ierr = VecAXPY(utrue,-1.0, u);
-  ierr = VecNorm(utrue,NORM_2,&err);
-  printf("v relerr = %f\n", err/solanal_norm);
-
-  ierr = VecGetSubVector(user.exactsol, user.isg[0], &utrue);
-  ierr = VecGetSubVector(user.sol, user.isg[0], &u);
-  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
-  ierr = VecAXPY(utrue,-1.0, u);
-  ierr = VecNorm(utrue,NORM_2,&err);
-  printf("u relerr = %f\n", err/solanal_norm);
-
-  printf("t = %f\n", user.t);
-  ierr = WriteSolution(&user, user.sol); CHKERRQ(ierr);
-
-
-  ierr = DMDestroy(&user.da_u);CHKERRQ(ierr);
-  ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
-  ierr = PetscFinalize();
-  return ierr;
-}
 
 PetscErrorCode AllocateVectors(UserContext *user)
 {
@@ -259,17 +156,12 @@ PetscErrorCode SetRhs(UserContext *user, Vec rhs, PetscScalar t, PetscScalar dt)
 {
   Vec rhsu, rhsv;
   Vec solu, solv, solp;
-  // Vec Gxpold, Gypold;
 
   VecGetSubVector(user->sol_old, user->isg[2], &solp);
-  // VecDuplicate(solu, &Gxpold);
-  // VecDuplicate(solv, &Gypold);
-  /* velocity part */
+
   VecGetSubVector(rhs, user->isg[0], &rhsu);
   VecGetSubVector(user->sol_old, user->isg[0], &solu);
   MatMult(user->Luright,solu,rhsu);
-  // MatMult(user->subA[2],solp,Gxpold);
-  // VecAXPY(rhsu,-Gxpold)
   VecRestoreSubVector(rhs, user->isg[0], &rhsu);
 
   VecGetSubVector(rhs, user->isg[1], &rhsv);
@@ -314,7 +206,6 @@ PetscErrorCode SetF(UserContext *user, Vec xvec, PetscScalar t)
     if (row < user->nx*user->ny){
       x = (PetscReal)(i+0.5)*user->hx;
       y = (PetscReal)(j+1)*user->hy;
-      // printf("x = %f, y = %f\n", x, y);
       val = user->dt*CalcFv(x,y,t,user->mu);
     } else {
       val = 0;
@@ -324,4 +215,107 @@ PetscErrorCode SetF(UserContext *user, Vec xvec, PetscScalar t)
   VecRestoreSubVector(xvec, user->isg[1], &fv);
 
   PetscFunctionReturn(0);
+}
+
+int main(int argc,char **argv)
+{
+  KSP            ksp;
+  PC             pc;
+  UserContext    user;
+  PetscErrorCode ierr;
+  PetscInt       mx,my;
+
+  ierr = PetscInitialize(&argc,&argv,(char*)0,NULL);if (ierr) return ierr;
+  ierr = KSPCreate(PETSC_COMM_WORLD,&ksp);CHKERRQ(ierr);
+
+  /* da for u */
+  ierr = DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_PERIODIC, DM_BOUNDARY_PERIODIC, DMDA_STENCIL_STAR,4,4,
+                      PETSC_DECIDE,PETSC_DECIDE,1,1,0,0,&user.da_u);CHKERRQ(ierr);
+  ierr = DMSetFromOptions(user.da_u);CHKERRQ(ierr);
+  ierr = DMSetUp(user.da_u);CHKERRQ(ierr);
+  ierr = DMDASetUniformCoordinates(user.da_u,0,1,0,1,0,0);CHKERRQ(ierr);
+  ierr = DMDASetFieldName(user.da_u,0,"u");CHKERRQ(ierr);
+  ierr = DMDAGetInfo(user.da_u,0,&mx,&my,0,0,0,0,0,0,0,0,0,0);CHKERRQ(ierr);
+
+  user.nx = mx;
+  user.ny = my;
+  user.hx = 1.0/mx;
+  user.hy = 1.0/my;
+  user.mu = 1.0;
+  user.dt = 1.0/mx;
+  user.t = 0;
+  user.gmresiter = 0;
+  user.hxvcycles = 0;
+  user.hyvcycles = 0;
+  user.pvcycles = 0;
+
+  printf("mx = %d, my = %d\n", mx, my);
+  printf("dt = %f\n", user.dt);
+
+  ierr = SetupMatrix(&user);
+  ierr = SetupIndexSets(&user);
+  ierr = SetupHelmholtzKSP(&user);
+  ierr = SetupPoissionKSP(&user);
+  ierr = AllocateVectors(&user);
+
+  ierr = KSPSetOperators(ksp,user.A,user.A);CHKERRQ(ierr);
+  ierr = KSPSetFromOptions(ksp);CHKERRQ(ierr);
+  ierr = KSPSetUp(ksp);CHKERRQ(ierr);
+  ierr = KSPGetPC(ksp,&pc);
+  ierr = PCSetType(pc,PCSHELL);
+  ierr = PCShellSetApply(pc,ShellPCApply);
+  ierr = PCShellSetContext(pc,&user);
+  ierr = PCSetFromOptions(pc);CHKERRQ(ierr);
+
+  /* initialize sol vector */
+  ierr = ExactSolution(&user, user.sol, 0);
+  ierr = VecCopy(user.sol,user.sol_old);
+
+  int iter;
+  for (size_t i = 0; i < mx/8; i++) {
+    ierr = SetRhs(&user,user.rhs,user.t,user.dt);
+    ierr = KSPSolve(ksp,user.rhs,user.sol);CHKERRQ(ierr);
+    ierr = KSPGetIterationNumber(ksp,&iter);
+    user.gmresiter = user.gmresiter+iter;
+    ierr = VecCopy(user.sol,user.sol_old); CHKERRQ(ierr);
+    user.t += user.dt;
+  }
+
+  printf("#gmresiter = %d, #vcycles = %d\n", user.gmresiter,
+                                             user.hxvcycles+user.hyvcycles+user.pvcycles);
+
+  PetscScalar solanal_norm, err;
+  Vec u, utrue;
+  ierr = ExactSolution(&user, user.exactsol, user.t-0.5*user.dt);
+  ierr = VecGetSubVector(user.exactsol, user.isg[2], &utrue);
+  ierr = VecGetSubVector(user.sol, user.isg[2], &u);
+  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
+
+  ierr = VecAXPY(utrue,-1.0, u);
+  ierr = VecNorm(utrue,NORM_2,&err);
+  printf("p relerr = %f\n", err/solanal_norm);
+
+  ierr = ExactSolution(&user, user.exactsol, user.t);
+  ierr = VecGetSubVector(user.exactsol, user.isg[1], &utrue);
+  ierr = VecGetSubVector(user.sol, user.isg[1], &u);
+  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
+  ierr = VecAXPY(utrue,-1.0, u);
+  ierr = VecNorm(utrue,NORM_2,&err);
+  printf("v relerr = %f\n", err/solanal_norm);
+
+  ierr = VecGetSubVector(user.exactsol, user.isg[0], &utrue);
+  ierr = VecGetSubVector(user.sol, user.isg[0], &u);
+  ierr = VecNorm(utrue,NORM_2,&solanal_norm);
+  ierr = VecAXPY(utrue,-1.0, u);
+  ierr = VecNorm(utrue,NORM_2,&err);
+  printf("u relerr = %f\n", err/solanal_norm);
+
+  printf("t = %f\n", user.t);
+  ierr = WriteSolution(&user, user.sol); CHKERRQ(ierr);
+
+
+  ierr = DMDestroy(&user.da_u);CHKERRQ(ierr);
+  ierr = KSPDestroy(&ksp);CHKERRQ(ierr);
+  ierr = PetscFinalize();
+  return ierr;
 }
